@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 
     <head>
@@ -9,17 +9,23 @@
         <title>Search NN Developer sites</title>
         <!-- <link rel="stylesheet" href="css/main.css" />
         <link rel="icon" href="images/favicon.png" /> -->
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-BmbxuPwQa2lc/FVzBcNJ7UAyJxM6wuqIj61tLrc4wSX0szH/Ev+nYRRuWlolflfl" crossorigin="anonymous">
     </head>
 
     <body>
-        <h1>Search NN Developer Sites</h1>
-        <form>
-            <input type="text" id="q" name="q" />
-            <input type="button" value="Search" id="search" />
-        </form>
-        <!-- <script src="js/scripts.js"></script> -->
+        <div class="container"></div>
+            <h1>Search NN Developer Sites</h1>
+            <form>
+                <input type="text" id="q" name="q" />
+                <input type="button" value="Search" id="search" />
+            </form>
+        </div>
+        <div class="container" id="searchresults">
+            <p>...</p>
+        </div>
 
 
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta2/dist/js/bootstrap.bundle.min.js" integrity="sha384-b5kHyXgcpbZJO/tY9Ul7kGkf1S0CWuKcCD38l8YkeH8z8QjE0GmW1gYU5S9FOnJ0" crossorigin="anonymous"></script>
         <script>
             (function() {
             // your page initialization code here
@@ -30,6 +36,25 @@
             function onExecuteSearch(evt) {
                 var searchValue = document.geElementbyId('q').value;
                 console.log('going to search for: ', searchValue);
+                document.getElementById('searchresults').innerHTML = '<p>...</p>';
+                fetch('/search?q='+searchValue, {
+                    method: "POST",
+                    cache: "no-cache",
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: "{}",
+
+                })
+                .then(response => response.json())
+                .then(json => {
+                    console.log('search results: ', json);
+                    response.products.forEach(function(product) {
+                        $tableBody.append(
+                            nunjucks.render( '_item-row.html', { id: product.id, name: product.name } )
+                        );
+                    });
+                });
             }
         </script>
     </body>

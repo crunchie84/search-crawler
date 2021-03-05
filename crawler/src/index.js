@@ -4,6 +4,7 @@ const puppeteer = require('puppeteer');
 const $ = require('cheerio');
 const { Client } = require('@elastic/elasticsearch')
 const client = new Client({ node: 'http://localhost:9200' })
+const normalizeUrl = require('normalize-url');
 
 
 console.log(chalk.yellow(figlet.textSync('Web Crawler', {horizontalLayout: 'full' })));
@@ -15,37 +16,34 @@ if (argv.url === undefined || argv.whitelisturls === undefined) {
     process.exit(1);
 }
 
+ 
+
+
 mainAsync()
 .then(() => console.log('done...'), (err) => console.error('error: '+err));
 
 async function mainAsync() {
-    const url = argv.url;
+    const url = normalizeUrl(argv.url);
 
     console.log(`Going to crawl root site ${url}`);
     process.env.NODE_TLS_REJECT_UNAUTHORIZED=0  
 
-    puppeteer
-        .launch()
-        .then((browser) => {
-            return browser.newPage();
-        })
-        .then((page) => {
-            return page.goto(url).then(function() {
-                return page.content();
-            });
-        })
-        .then(function(html) {
-            const parsed = parsePageContents(html, url);
-            index(parsed);
-          })
-          .catch(function(err) {
-            //handle error
-          });
-    
-    
-    // const result = await crawlAndIndex(argv.url, urlsIndexed);
-    // console.log(result);
+    const seenUrls = [];
+
+    const browser = await puppeteer.launch()
+    const parsed = await fetchPage(browser, url);
+    await index(parsed);
+    seenUrls.push(url);
 }
+
+async function fetchPage(browser, url) {
+    const page = browser.newPage();
+    const html = await page.goto(url).then(() => page.content());
+    const parsed = await parsePageContents(html);
+    return parsed;
+}
+
+
 
 async function crawlAndIndex(url, urlsIndexed) {
     const result = await crawl(url);
