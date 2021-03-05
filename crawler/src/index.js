@@ -1,7 +1,5 @@
 const chalk = require('chalk');
 const figlet = require('figlet');
-const Crawler = require("crawler");
-const seenreq = require('seenreq');
 const puppeteer = require('puppeteer');
 const $ = require('cheerio');
 const { Client } = require('@elastic/elasticsearch')
@@ -43,40 +41,6 @@ async function mainAsync() {
           .catch(function(err) {
             //handle error
           });
-
-    const seen = new seenreq();
-    // const c = new Crawler({
-    //     maxConnections : 10,
-    //     // This will be called for each crawled page
-    //     callback : function (error, res, done) {
-    //         if (error){
-    //             console.log(error);
-    //         } else{
-    //             var $ = res.$;
-    //             // $ is Cheerio by default
-    //             //a lean implementation of core jQuery designed specifically for the server
-    //             console.log($("title").text());
-    //             console.log($.html());
-    //             console.log($('a').attr('href'));
-
-    //             const urls = [];
-    //             $('a').each((el) => {
-    //                 console.log(el);
-    //                 urls.push(this.href);
-    //             });
-    //             console.log(urls);
-
-    //         }
-    //         done();
-    //     }
-    // });
-    
-    // c.queue(argv.url);
-
-    console.log('seen:', seen.normalize(argv.url));
-
-
-    // const urlsIndexed = [];
     
     
     // const result = await crawlAndIndex(argv.url, urlsIndexed);

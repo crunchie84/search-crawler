@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+
+    <head>
+        <meta charset="utf-8" />
+        <meta http-equiv="x-ua-compatible" content="ie=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+        <title>Search NN Developer sites</title>
+        <!-- <link rel="stylesheet" href="css/main.css" />
+        <link rel="icon" href="images/favicon.png" /> -->
+    </head>
+
+    <body>
+        <h1>Search NN Developer Sites</h1>
+        <form>
+            <input type="text" id="q" name="q" />
+            <input type="button" value="Search" id="search" />
+        </form>
+        <!-- <script src="js/scripts.js"></script> -->
+
+
+        <script>
+            (function() {
+            // your page initialization code here
+            // the DOM will be available here
+                document.getElementById('search').addEventListener('click', onExecuteSearch);
+            })();
+
+            function onExecuteSearch(evt) {
+                var searchValue = document.geElementbyId('q').value;
+                console.log('going to search for: ', searchValue);
+            }
+        </script>
+    </body>
+</html>
