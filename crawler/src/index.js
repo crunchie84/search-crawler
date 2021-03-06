@@ -1,12 +1,11 @@
 const chalk = require('chalk');
 const figlet = require('figlet');
 const puppeteer = require('puppeteer');
-const $ = require('cheerio');
+const cheerio = require('cheerio');
 const { Client } = require('@elastic/elasticsearch')
 const normalizeUrl = require('normalize-url');
 const Rx = require('rxjs');
 const RxOp = require('rxjs/operators');
-//import { queueScheduler, Subject } from 'rxjs';
 
 
 console.log(chalk.yellow(figlet.textSync('Web Crawler', { horizontalLayout: 'full' })));
@@ -29,8 +28,8 @@ async function mainAsync() {
     console.log(`Going to crawl root site ${url}...`);
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = 0
 
-    //const indexName = await createIndex(client);
-    const indexName = 'webpages-202102061623';
+    const indexName = await createIndex(client);
+    //const indexName = 'webpages-202102061623';
     const seenUrls = [];
 
     const browser = await puppeteer.launch()
@@ -50,7 +49,7 @@ async function mainAsync() {
         })
     )
         .subscribe(
-            (result) => console.log('downloaded and indexed url: ' + result.url),
+            (result) => console.log('Downloaded and indexed url: ' + result.url),
             (err) => console.error('Error happened: ' + err.message)
         );
 
@@ -64,7 +63,6 @@ async function mainAsync() {
 async function fetchAndParsePage(browser, url) {
     try {
         const page = await browser.newPage();
-        console.log(`Going to fetch url: "${url}"`);
         const response = await page.goto(url, { timeout: 5 * 1000});
         if (!response.ok()) {
             console.log(`Fetching ${url} resulted status ${response.status()}:${response.statusText()}`);
@@ -82,7 +80,10 @@ async function fetchAndParsePage(browser, url) {
 // take the page contents and extract any follow up urls to crawl
 async function parsePageContents(html, url) {
     const urls = [];
-    $('a', html).each((i, link) => {
+
+    const $ = cheerio.load(html);
+
+    $('a').each((i, link) => {
         const href = $(link).attr('href');
 
         if (href.startsWith('#')) {
@@ -98,8 +99,8 @@ async function parsePageContents(html, url) {
     });
 
     const parsed = {
-        content: $('body', html).text(),
-        title: $('title', html).text(),
+        content: $('body').html(),
+        title: $('title').text(),
         url: url,
         crawled_at: new Date().toISOString(),
         outbound_urls: urls
