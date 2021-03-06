@@ -72,6 +72,7 @@ async function fetchAndParsePage(browser, url) {
         return await parsePageContents(html, url);
     }
     catch(err) {
+        console.log(JSON.stringify(err));
         throw err;
     }
 }
