@@ -68,7 +68,7 @@ async function fetchAndParsePage(browser, url) {
             console.log(`Fetching ${url} resulted status ${response.status()}:${response.statusText()}`);
             return undefined;
         }
-        const html = await response.content()
+        const html = await page.content();
         return await parsePageContents(html, url);
     }
     catch(err) {
