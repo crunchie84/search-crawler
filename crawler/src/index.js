@@ -40,7 +40,7 @@ async function mainAsync() {
         RxOp.filter((url) => !seenUrls.find(seenUrl => seenUrl === url)),
         RxOp.concatMap((url) => fetchAndParsePage(browser, url)),
         RxOp.filter((parsedPageObject) => parsedPageObject !== undefined),
-        RxOp.mergeMap((parsedPageObject) => index(indexName, parsedPageObject)),
+        RxOp.mergeMap((parsedPageObject) => index(client ,indexName, parsedPageObject)),
         RxOp.tap((result) => {
             seenUrls.push(result.url);
             // only go deeper with our crawl on the same domain
@@ -105,7 +105,11 @@ async function parsePageContents(html, url) {
         outbound_urls: urls
             .map(u => {
                 // remove any query params ?=.. stuff
-                return u.substr(0, u.indexOf('?')); 
+                const indexOf = u.indexOf('?');
+                if (indexOf > -1) {
+                    return u.substr(0, indexOf);
+                }
+                return u;
             })
             .map(u => normalizeUrl(u, { forceHttps: true}))
             .filter(onlyUnique), //dedupe and normalize
@@ -119,7 +123,7 @@ function onlyUnique(value, index, self) {
 }
 
 // index the given page object to our search engine
-async function index(indexName, pageObject) {
+async function index(client, indexName, pageObject) {
     console.log('going to index', pageObject.url);
     // index it!
     try {
