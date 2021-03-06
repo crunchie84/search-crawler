@@ -13,8 +13,8 @@ console.log(chalk.yellow(figlet.textSync('Web Crawler', { horizontalLayout: 'ful
 
 const argv = require('minimist')(process.argv.slice(2));
 
-if (argv.url === undefined || argv.whitelisturls === undefined) {
-    console.error('Usage: `npm run crawler -- --url={site-base-url} --whitelisturls=insim.biz,nn-engineering.dev`');
+if (argv.url === undefined) {
+    console.error('Usage: `npm run crawler -- --url={site-base-url}`');
     process.exit(1);
 }
 
@@ -23,13 +23,14 @@ mainAsync();
 async function mainAsync() {
     const client = new Client({ node: 'http://localhost:9200' })
 
-    const url = normalizeUrl(argv.url);
+    const url = normalizeUrl(argv.url, { forceHttps: true});
     const baseUrl = url; // starting point, we do not escape from this domain
 
     console.log(`Going to crawl root site ${url}...`);
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = 0
 
-    const indexName = await createIndex(client);
+    //const indexName = await createIndex(client);
+    const indexName = 'webpages-202102061623';
     const seenUrls = [];
 
     const browser = await puppeteer.launch()
@@ -53,6 +54,7 @@ async function mainAsync() {
             (err) => console.error('Error happened: ' + err.message)
         );
 
+    // initiate first request into our queue
     queue.next(url);
 }
 
@@ -60,10 +62,10 @@ async function mainAsync() {
 
 
 async function fetchAndParsePage(browser, url) {
-    console.log(`Going to fetch url: ${url}`);
-    try{
+    try {
         const page = await browser.newPage();
-        const response = await page.goto(url, { timeout: 2 * 1000});
+        console.log(`Going to fetch url: "${url}"`);
+        const response = await page.goto(url, { timeout: 5 * 1000});
         if (!response.ok()) {
             console.log(`Fetching ${url} resulted status ${response.status()}:${response.statusText()}`);
             return undefined;
@@ -71,9 +73,9 @@ async function fetchAndParsePage(browser, url) {
         const html = await page.content();
         return await parsePageContents(html, url);
     }
-    catch(err) {
-        console.log(JSON.stringify(err));
-        throw err;
+    catch (err) {
+        console.log(`Error while retrieving page: ${err.message}`);
+        return undefined;
     }
 }
 
@@ -105,7 +107,7 @@ async function parsePageContents(html, url) {
                 // remove any query params ?=.. stuff
                 return u.substr(0, u.indexOf('?')); 
             })
-            .map(u => normalizeUrl(u))
+            .map(u => normalizeUrl(u, { forceHttps: true}))
             .filter(onlyUnique), //dedupe and normalize
     };
     return parsed;
@@ -158,6 +160,12 @@ async function createIndex(client) {
     //     console.log(err, result)
     // })
 
+    try{
+        await client.indices.delete({
+            index: indexName
+        });
+    }
+    catch(err) {}
 
     console.log(`Creating index... ${indexName}`);
     await client.indices.create({
