@@ -88,7 +88,13 @@ async function parsePageContents(html, url) {
         title: $('title', html).text(),
         url: url,
         crawled_at: new Date().toISOString(),
-        outbound_urls: urls.map(u => normalizeUrl(u)).filter(onlyUnique), //dedupe and normalize
+        outbound_urls: urls
+            .map(u => {
+                // remove any query params ?=.. stuff
+                return u.substr(0, u.indexOf('?')); 
+            })
+            .map(u => normalizeUrl(u))
+            .filter(onlyUnique), //dedupe and normalize
     };
     return parsed;
 }
