@@ -38,6 +38,7 @@ async function mainAsync() {
         RxOp.map((url) => normalizeUrl(url)),
         RxOp.filter((url) => !seenUrls.find(seenUrl => seenUrl === url)),
         RxOp.concatMap((url) => fetchAndParsePage(browser, url)),
+        RxOp.filter((parsedPageObject) => parsedPageObject !== undefined),
         RxOp.mergeMap((parsedPageObject) => index(indexName, parsedPageObject)),
         RxOp.tap((result) => {
             seenUrls.push(result.url);
@@ -49,7 +50,7 @@ async function mainAsync() {
     )
         .subscribe(
             (result) => console.log('downloaded and indexed url: ' + result.url),
-            (err) => console.error('Error: ' + err)
+            (err) => console.error('Error happened: ' + err.message)
         );
 
     queue.next(url);
@@ -59,10 +60,20 @@ async function mainAsync() {
 
 
 async function fetchAndParsePage(browser, url) {
-    console.log('Going to fetch url: ', url);
-    const page = await browser.newPage();
-    const html = await page.goto(url).then(() => page.content());
-    return await parsePageContents(html, url);
+    console.log(`Going to fetch url: ${url}`);
+    try{
+        const page = await browser.newPage();
+        const response = await page.goto(url, { timeout: 2 * 1000});
+        if (!response.ok()) {
+            console.log(`Fetching ${url} resulted status ${response.status()}:${response.statusText()}`);
+            return undefined;
+        }
+        const html = await response.content()
+        return await parsePageContents(html, url);
+    }
+    catch(err) {
+        throw err;
+    }
 }
 
 // take the page contents and extract any follow up urls to crawl
