@@ -1,4 +1,5 @@
 const path = require('path');
+var urlLib=require('url');
 
 const chalk = require('chalk');
 const figlet = require('figlet');
@@ -91,10 +92,11 @@ function cleanUrl(url) {
     //     .replace('/./', '/');
     let baseUrl = path.normalize(url);
         
-
+    // remove trailing #
     if (baseUrl.slice(-1) === '#') {
         baseUrl = baseUrl.substr(0, baseUrl.lastIndexOf('#')); //remove last char # because that makes no sense
     }
+
     // for static pages the query param is irrelevant
     // const indexOf = baseUrl.indexOf('?');
     // if (indexOf > -1) {
@@ -113,6 +115,14 @@ function cleanUrl(url) {
         }
     }
 
+    // keep urls with #/ in it (+md_pages) for gitbooks
+    // loose urls with # in it for non-gitbooks, we are not indexing anchors
+    if (baseUrl.indexOf('#') > -1){
+        if(!baseUrl.includes('md_pages')) {
+            //regular anchor, chop it we are not indexing those
+            return baseUrl.substr(0, baseUrl.indexOf('#'));
+        }
+    }
     return baseUrl;
 }
 
@@ -121,7 +131,6 @@ function cleanUrl(url) {
 async function fetchAndParsePage(browser, url, originUrl, isSeenUrlFnc, addToSeenUrlsFnc, logToDebugFnc) {
     url = cleanUrl(url);
     if (isSeenUrlFnc(url)){
-        logToDebugFnc('url already seen, skipping');
         return undefined;
     }
 
@@ -167,9 +176,9 @@ async function parsePageContents(html, url) {
 
         // anchors vs gitbook links
         // anchors are looking like #this-is-an-anchor
-        // gitbook looks liks #/md_pages/here-be-a-page
         if (href.startsWith('#')) {
             if (href.startsWith('#/')) {
+                // gitbook looks liks #/md_pages/here-be-a-page
                 return urls.push(baseUrlForLinks + href);
             }
             return; // this is a local anchor on this page to an id=#foo, skip it
@@ -179,22 +188,37 @@ async function parsePageContents(html, url) {
             return;//do not further index these magical gitbook links
         }
 
-        //check is relative url
-        if (href.indexOf(':') === -1){ // no mailto: links to follow
-            // if the href starts with an # its an anchor, no need to add / before it then
-            if (href.startsWith('#') || baseUrlForLinks.slice(-1) === '#') {
-                return urls.push(baseUrlForLinks + href);
-            }
-
-            //make sure we glue it together with at least one /
-            if(baseUrlForLinks.slice(-1) !== '/' && !href.startsWith('/')) {
-                // no / present between the parts, glue it together 
-                urls.push(baseUrlForLinks + '/' + href);
-            }
-            else {
-                urls.push(baseUrlForLinks + href);//relative url
-            }
+        if (href.indexOf(':') !== -1){
+            return; //not going to handle other protocols like mailto:foo@bar.baz
         }
+
+        // this is a local path switch denotion, we need to get rid of the # on the url to make it sensib;e
+        if (href.startsWith('.') && url.includes('#')) {
+            const baseUrl = url.substr(0, url.indexOf('#'));
+            if (baseUrl.slice(-1) !== '/') {
+                return urls.push(baseUrl + '/' + href);
+            }
+            return urls.push(baseUrl + href);
+        }
+
+
+        // if the href starts with an # its an anchor, no need to add / before it then
+        if (href.startsWith('#') || baseUrlForLinks.slice(-1) === '#') {
+            return urls.push(baseUrlForLinks + href);
+        }
+
+        //make sure we glue it together with at least one /
+        if(baseUrlForLinks.slice(-1) !== '/' && !href.startsWith('/')) {
+            // no / present between the parts, glue it together 
+            return urls.push(baseUrlForLinks + '/' + href);
+        }
+
+        if (href.startsWith('/')) {
+            //path is based on the root of the url
+            return urls.push('https://' + urlLib.parse(url).hostname + href);
+        }
+
+        urls.push(baseUrlForLinks + href);//relative url
     });
 
     //cleanup the body a lot with non-functionals for text searches
@@ -206,6 +230,7 @@ async function parsePageContents(html, url) {
     // aside typically contains the menu. There is no extra information in there to index
     $('body').find('aside').remove();
     $('body').find('nav').remove();
+    $('body').find('header').remove();
 
     const content = $('body *').contents().map(function(){ 
         return (this.type === 'text') ? $(this).text()+' ' : '';
