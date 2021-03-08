@@ -28,11 +28,10 @@ async function mainAsync() {
     console.log(`Going to crawl root site ${url}...`);
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = 0
 
-    const indexName = await createIndex(client);
+    const { indexName } = await createIndex(client);
     const seenUrls = [];
 
     const browser = await puppeteer.launch()
-
 
     const queue = new Rx.Subject();
     queue.pipe(
@@ -172,8 +171,8 @@ async function createIndex(client) {
     function formatDate(date) {
         return [
             date.getFullYear(),
-            date.getMonth(),
-            date.getDay(),
+            1 + date.getMonth(), // zero based
+            date.getDate(),
             date.getHours(),
             date.getMinutes()
         ]
@@ -209,7 +208,12 @@ async function createIndex(client) {
                         htmlstrip_analyzer: {
                             tokenizer: 'standard',
                             char_filter: ['html_strip'],
-                            filter: ['lowercase', 'asciifolding']
+                            filter: [
+                                'lowercase', //all lowercase
+                                'asciifolding', // convert diacritcs to base letter
+                                'stop', // remove stopwords (the,and,a,..)
+                                'stemmer' // default to base root of words
+                            ]
                         }
                     }
                 },
@@ -229,7 +233,14 @@ async function createIndex(client) {
         }
     });
 
+    await client
+        .indices
+        .putAlias({ index: indexName, name: 'webpages' });
+
     console.log(`Done preparing new ES index: ${indexName}`);
 
-    return indexName;
+    return { 
+        indexName, 
+        alias: 'webpages' 
+    };
 }

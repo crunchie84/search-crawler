@@ -15,16 +15,12 @@
     <body>
         <div class="container"></div>
             <h1>Search NN Developer Sites</h1>
-            <form>
-                <input type="text" id="q" name="q" />
-                <input type="button" value="Search" id="search" />
+            <form id="searchform">
+                <label>Query<input type="text" id="query" name="q" /></label>
+                <input type="submit" value="Search" id="search" />
             </form>
         </div>
-        <div class="container" id="searchresults">
-            <p>...</p>
-        </div>
-
-
+        <div class="container" id="searchresults"></div>
 
 
         <script id="template" type="x-tmpl-mustache">
@@ -37,16 +33,22 @@
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta2/dist/js/bootstrap.bundle.min.js" integrity="sha384-b5kHyXgcpbZJO/tY9Ul7kGkf1S0CWuKcCD38l8YkeH8z8QjE0GmW1gYU5S9FOnJ0" crossorigin="anonymous"></script>
         <script src="https://unpkg.com/mustache@latest"></script>
         <script>
-            (function() {
+           (function() {
             // your page initialization code here
             // the DOM will be available here
-                document.getElementById('search').addEventListener('click', onExecuteSearch);
+                //document.getElementById('search').addEventListener('click', onExecuteSearch);
+                document.getElementById('searchform').addEventListener('submit', onExecuteSearch);
             })();
 
-            function onExecuteSearch(evt) {
-                var searchValue = document.geElementbyId('q').value;
+            function onExecuteSearch(event) {
+                event.preventDefault();
+
+                var searchValue = document.getElementById('query').value;
                 console.log('going to search for: ', searchValue);
-                document.getElementById('searchresults').innerHTML = '<p>...</p>';
+                
+                var $searchResultsContainer = document.getElementById('searchresults');
+                $searchResultsContainer.innerHTML = '<p>...</p>';
+
                 fetch('/search?q='+searchValue, {
                     method: "POST",
                     cache: "no-cache",
@@ -58,14 +60,16 @@
                 .then(response => response.json())
                 .then(json => {
                     console.log('search results: ', json);
+                    
+                    $searchResultsContainer.innerHTML = '';
                     var template = document.getElementById('template').innerHTML;
                     response.products.forEach(function(product) {
-                        $tableBody.append(
+                        $searchResultsContainer.append(
                             Mustache.render(template, {
                                 title: 'test',
                                 content: 'foo',
                                 url: 'http://google.com'
-                            });
+                            })
                         );
                     });
                 });
