@@ -66,7 +66,7 @@ async function mainAsync() {
             }
         }),
         RxOp.map((parsedPageObject) => ({ domain_url, domain_title, ...parsedPageObject})),
-//        RxOp.mergeMap((parsedPageObject) => index(client ,indexName, parsedPageObject, logToDebugFnc)),
+        RxOp.mergeMap((parsedPageObject) => index(client ,indexName, parsedPageObject, logToDebugFnc)),
         RxOp.tap((parsedPageObject) => {
             seenUrls.push(parsedPageObject.url);
             //logToDebugFnc(`urls found on ${parsedPageObject.url}: ${parsedPageObject.outbound_urls}`);
