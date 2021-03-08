@@ -19,7 +19,9 @@ app.post('/search', (req,res) => {
         },
         highlight: {
           fields: {
-            content: {}
+            content: {
+              "fragment_size": 250,
+            }
           }
         }
       }

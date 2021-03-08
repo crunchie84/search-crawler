@@ -1,9 +1,10 @@
+const path = require('path');
+
 const chalk = require('chalk');
 const figlet = require('figlet');
 const puppeteer = require('puppeteer');
 const cheerio = require('cheerio');
 const { Client } = require('@elastic/elasticsearch')
-const normalizeUrl = require('normalize-url');
 const Rx = require('rxjs');
 const RxOp = require('rxjs/operators');
 
@@ -12,8 +13,10 @@ console.log(chalk.yellow(figlet.textSync('Web Crawler', { horizontalLayout: 'ful
 
 const argv = require('minimist')(process.argv.slice(2));
 
-if (argv.url === undefined) {
-    console.error('Usage: `npm run crawler -- --url={site-base-url}`');
+if (argv.recreateindex === undefined && argv.url === undefined && argv.index === undefined) {
+    console.error('Usage: `npm run crawler -- --index={indexname} --url={site-base-url}`');
+    console.error('Usage: `npm run crawler -- --recreateindex=true` To only create a fresh index to start using' );
+    console.error('Hint: You can dump debug information using `kill -s SIGUSR2 {pid}` to this nodejs process');
     process.exit(1);
 }
 
@@ -21,6 +24,13 @@ mainAsync();
 
 async function mainAsync() {
     const client = new Client({ node: 'http://localhost:9200' })
+    if (argv.recreateindex !== undefined) {
+        const {indexName} = await createIndex(client);
+        console.log(`new created index=${indexName}`);
+        return process.exit();
+    }
+
+    const isDebugMode = argv.debug!== undefined;
 
     const url = cleanUrl(argv.url, { forceHttps: true});
     const baseUrl = url; // starting point, we do not escape from this domain
@@ -28,22 +38,27 @@ async function mainAsync() {
     console.log(`Going to crawl root site ${url}...`);
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = 0
 
-    const { indexName } = await createIndex(client);
+    const indexName = argv.index;
     const seenUrls = [];
-
     const browser = await puppeteer.launch()
-    
     let domain_title;
     const domain_url = baseUrl;
 
+    process.on('SIGUSR2', function onDumpDiagnosticsInfo() {
+        console.log('recieved SIGUSR2 signal');
+        console.log('seen urls: ', seenUrls);
+    });
+
+    const isSeenUrlFnc = (url) => seenUrls.find(seenUrl => seenUrl === url);
+    const addToSeenUrlsFnc = (url) => seenUrls.push(url);
+    const logToDebugFnc = (log) => { 
+        if (!isDebugMode) return;
+        console.log(log);
+    }
+
     const queue = new Rx.Subject();
     queue.pipe(
-        RxOp.map((url) => cleanUrl(url)),
-        // RxOp.tap((url) => {
-        //     console.log(`next url [alreadyseen=${!!seenUrls.find(seenUrl => seenUrl === url)}]: ${url}`);
-        // }),
-        RxOp.filter((url) => !seenUrls.find(seenUrl => seenUrl === url)),
-        RxOp.concatMap((url) => fetchAndParsePage(browser, url)),
+        RxOp.concatMap(({url, origin }) => fetchAndParsePage(browser, url, origin, isSeenUrlFnc, addToSeenUrlsFnc, logToDebugFnc)),
         RxOp.filter((parsedPageObject) => parsedPageObject !== undefined),
         RxOp.tap((parsedPageObject) => {
             if (domain_title === undefined){
@@ -51,14 +66,15 @@ async function mainAsync() {
             }
         }),
         RxOp.map((parsedPageObject) => ({ domain_url, domain_title, ...parsedPageObject})),
-        RxOp.mergeMap((parsedPageObject) => index(client ,indexName, parsedPageObject)),
-        RxOp.tap((result) => {
-            seenUrls.push(result.url);
-            //console.log(`urls found on ${result.url}: ${result.outbound_urls}`)
+//        RxOp.mergeMap((parsedPageObject) => index(client ,indexName, parsedPageObject, logToDebugFnc)),
+        RxOp.tap((parsedPageObject) => {
+            seenUrls.push(parsedPageObject.url);
+            //logToDebugFnc(`urls found on ${parsedPageObject.url}: ${parsedPageObject.outbound_urls}`);
             // only go deeper with our crawl on the same domain
-            result.outbound_urls
-                .filter(u => u.startsWith(baseUrl))
-                .forEach(u => queue.next(u));
+            parsedPageObject.outbound_urls
+                .filter(u => u.startsWith(baseUrl)) // stay on the same base url
+                .filter(u => !seenUrls.find(seenUrl => seenUrl === u)) // do not enqueue urls we have already visited
+                .forEach(u => queue.next({ url: u, origin: parsedPageObject.url})); // enqueue next url to retrieve
         })
     )
     .subscribe(
@@ -67,15 +83,18 @@ async function mainAsync() {
     );
 
     // initiate first request into our queue
-    queue.next(url);
+    queue.next({ url: url, origin: undefined});
 }
 
 function cleanUrl(url) {
-    // console.log('going to clean url: ', url);
-    //let baseUrl = normalizeUrl(argv.url, { forceHttps: true});
+    // let baseUrl = url
+    //     .replace('/./', '/');
+    let baseUrl = path.normalize(url);
+        
 
-    let baseUrl = url.toLowerCase();
-
+    if (baseUrl.slice(-1) === '#') {
+        baseUrl = baseUrl.substr(0, baseUrl.lastIndexOf('#')); //remove last char # because that makes no sense
+    }
     // for static pages the query param is irrelevant
     // const indexOf = baseUrl.indexOf('?');
     // if (indexOf > -1) {
@@ -99,12 +118,20 @@ function cleanUrl(url) {
 
 
 
-async function fetchAndParsePage(browser, url) {
+async function fetchAndParsePage(browser, url, originUrl, isSeenUrlFnc, addToSeenUrlsFnc, logToDebugFnc) {
+    url = cleanUrl(url);
+    if (isSeenUrlFnc(url)){
+        logToDebugFnc('url already seen, skipping');
+        return undefined;
+    }
+
+    logToDebugFnc(`processing url ${url} (origin=${originUrl}`);
     try {
         const page = await browser.newPage();
         const response = await page.goto(url, { timeout: 5 * 1000});
         if (!response.ok()) {
             console.log(`Fetching ${url} resulted status ${response.status()}:${response.statusText()}`);
+            addToSeenUrlsFnc(url);// we do not want to keep indexing this url which fails
             return undefined;
         }
         const html = await page.content();
@@ -112,6 +139,7 @@ async function fetchAndParsePage(browser, url) {
     }
     catch (err) {
         console.log(`Error while retrieving page: ${err.message}`);
+        addToSeenUrlsFnc(url);// we do not want to keep indexing this url which fails
         return undefined;
     }
 }
@@ -119,26 +147,80 @@ async function fetchAndParsePage(browser, url) {
 // take the page contents and extract any follow up urls to crawl
 async function parsePageContents(html, url) {
     const urls = [];
+    const $ = cheerio.load(html, { decodeEntities: false });
 
-    const $ = cheerio.load(html);
-
+    // if we end in a static file known extension then remove it up until the last slash
+    let baseUrlForLinks = url;
+    if (url.includes('.md') || url.includes('.htm')) {
+        baseUrlForLinks = url.substr(0, 1 + url.lastIndexOf('/'));// remove any filenames if they are there
+    }
     $('a').each((i, link) => {
         const href = $(link).attr('href');
 
+        if(!href || href === '#' || href.includes('##')) {
+            return;//no url in there or mallformed
+        }
+
+        if (href.startsWith('http')){
+            return urls.push(href);
+        }
+
+        // anchors vs gitbook links
+        // anchors are looking like #this-is-an-anchor
+        // gitbook looks liks #/md_pages/here-be-a-page
         if (href.startsWith('#')) {
-            urls.push(url + href);
-            return;
+            if (href.startsWith('#/')) {
+                return urls.push(baseUrlForLinks + href);
+            }
+            return; // this is a local anchor on this page to an id=#foo, skip it
         }
 
-        if (!href.startsWith('https://')) {
-            return; // only extract https page urls for now, skip stuff like 'mailto
+        if ($(link).attr('data-nosearch') !== undefined){
+            return;//do not further index these magical gitbook links
         }
 
-        urls.push(href);
+        //check is relative url
+        if (href.indexOf(':') === -1){ // no mailto: links to follow
+            // if the href starts with an # its an anchor, no need to add / before it then
+            if (href.startsWith('#') || baseUrlForLinks.slice(-1) === '#') {
+                return urls.push(baseUrlForLinks + href);
+            }
+
+            //make sure we glue it together with at least one /
+            if(baseUrlForLinks.slice(-1) !== '/' && !href.startsWith('/')) {
+                // no / present between the parts, glue it together 
+                urls.push(baseUrlForLinks + '/' + href);
+            }
+            else {
+                urls.push(baseUrlForLinks + href);//relative url
+            }
+        }
     });
 
+    //cleanup the body a lot with non-functionals for text searches
+    $('body').find('script').remove();
+    $('body').find('svg').remove();
+    $('body').find('img').remove();
+    $('body').find('button').remove();
+
+    // aside typically contains the menu. There is no extra information in there to index
+    $('body').find('aside').remove();
+    $('body').find('nav').remove();
+
+    const content = $('body *').contents().map(function(){ 
+        return (this.type === 'text') ? $(this).text()+' ' : '';
+    }).get()
+        .join('')
+        .replace(/(\r\n|\r|\n){2,}/g, '$1\n') // clean up multiple newlines
+        .replace(/\s+/g, ' ') // clean up multiples spaces
+        .trim(); // clean up begin/end of string
+
+    if(url.includes('md_pages') && content.includes('Page not Found (404)')){
+        return undefined; // non-descriptive 404 page of gitbooks
+    }
+
     const parsed = {
-        content: $('body').html(),
+        content: content,
         title: $('title').text(),
         url: url,
         crawled_at: new Date().toISOString(),
@@ -155,8 +237,8 @@ function onlyUnique(value, index, self) {
 }
 
 // index the given page object to our search engine
-async function index(client, indexName, pageObject) {
-    //console.log('going to index', pageObject.url);
+async function index(client, indexName, pageObject, logToDebugFnc) {
+    logToDebugFnc('going to index', pageObject.url);
     try {
         const indexResult = await client.index({
             index: indexName,
