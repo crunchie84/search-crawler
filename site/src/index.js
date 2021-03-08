@@ -31,11 +31,15 @@ app.post('/search', (req,res) => {
             _id: hit._id,
             _score: hit._score,
             title: hit._source.title,
+            domain_title: hit._source.domain_title,
             url: hit._source.url,
             crawled_at: hit._source.crawled_at,
             _excerpt: hit.highlight.content
           }))
-          res.status(200).json(mapped);
+          res.status(200).json({
+            total: hits,
+            results: mapped
+          });
         },
         (err) => {
           console.log(`Error while searching for "${query}": ${err.message}`); 

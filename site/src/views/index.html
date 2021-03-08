@@ -25,18 +25,15 @@
 
         <script id="template" type="x-tmpl-mustache">
             <div>
-                <h2>{{ title }} </h2>
-                <p> {{ content }} </p>
-                <a href="{{url}}">Go to page</a>
+                <h2><a href="{{url}}">{{ title }}</a></h2>
+                <h3>Crawled at {{ crawled_at}} on site <a href={{domain_url}}>{{ domain_title }}</a></h3>
+                <p> {{{ _excerpt }}} </p>
             </div>
         </script>
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta2/dist/js/bootstrap.bundle.min.js" integrity="sha384-b5kHyXgcpbZJO/tY9Ul7kGkf1S0CWuKcCD38l8YkeH8z8QjE0GmW1gYU5S9FOnJ0" crossorigin="anonymous"></script>
         <script src="https://unpkg.com/mustache@latest"></script>
         <script>
            (function() {
-            // your page initialization code here
-            // the DOM will be available here
-                //document.getElementById('search').addEventListener('click', onExecuteSearch);
                 document.getElementById('searchform').addEventListener('submit', onExecuteSearch);
             })();
 
@@ -58,19 +55,13 @@
                     body: "{}",
                 })
                 .then(response => response.json())
-                .then(json => {
-                    console.log('search results: ', json);
+                .then(responseDoc => {
+                    console.log('total search results: ', responseDoc.total);
                     
                     $searchResultsContainer.innerHTML = '';
                     var template = document.getElementById('template').innerHTML;
-                    response.products.forEach(function(product) {
-                        $searchResultsContainer.append(
-                            Mustache.render(template, {
-                                title: 'test',
-                                content: 'foo',
-                                url: 'http://google.com'
-                            })
-                        );
+                    responseDoc.results.forEach(function(searchResult) {
+                        $searchResultsContainer.innerHTML += Mustache.render(template, searchResult);
                     });
                 });
             }

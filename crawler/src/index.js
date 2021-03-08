@@ -32,6 +32,9 @@ async function mainAsync() {
     const seenUrls = [];
 
     const browser = await puppeteer.launch()
+    
+    let domain_title;
+    const domain_url = baseUrl;
 
     const queue = new Rx.Subject();
     queue.pipe(
@@ -42,10 +45,16 @@ async function mainAsync() {
         RxOp.filter((url) => !seenUrls.find(seenUrl => seenUrl === url)),
         RxOp.concatMap((url) => fetchAndParsePage(browser, url)),
         RxOp.filter((parsedPageObject) => parsedPageObject !== undefined),
+        RxOp.tap((parsedPageObject) => {
+            if (domain_title === undefined){
+                domain_title = parsedPageObject.title
+            }
+        }),
+        RxOp.map((parsedPageObject) => ({ domain_url, domain_title, ...parsedPageObject})),
         RxOp.mergeMap((parsedPageObject) => index(client ,indexName, parsedPageObject)),
         RxOp.tap((result) => {
             seenUrls.push(result.url);
-            console.log(`urls found on ${result.url}: ${result.outbound_urls}`)
+            //console.log(`urls found on ${result.url}: ${result.outbound_urls}`)
             // only go deeper with our crawl on the same domain
             result.outbound_urls
                 .filter(u => u.startsWith(baseUrl))
@@ -147,15 +156,12 @@ function onlyUnique(value, index, self) {
 
 // index the given page object to our search engine
 async function index(client, indexName, pageObject) {
-    console.log('going to index', pageObject.url);
-    // index it!
+    //console.log('going to index', pageObject.url);
     try {
-        //await Promise.resolve('FOO');
         const indexResult = await client.index({
             index: indexName,
             body: { ...pageObject }
         });
-        // console.log('indexed into ES', indexResult);
     }
     catch (error) {
         console.log('error while indexing', error);
@@ -226,6 +232,8 @@ async function createIndex(client) {
                     },
                     title: { type: 'text' },
                     url: { type: 'keyword', },
+                    domain_title: { type: 'text' },
+                    domain_url: { type: 'keyword' },
                     crawled_at: { type: 'date' },
                     outbound_urls: { type: 'keyword', },
                 }
