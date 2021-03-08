@@ -12,6 +12,7 @@
   "license": "ISC",
   "dependencies": {
     "express": "^4.17.1",
+    "mustache": "^4.1.0",
     "nunjucks": "^3.2.3"
   }
 }
