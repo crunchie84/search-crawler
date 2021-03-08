@@ -22,7 +22,7 @@ mainAsync();
 async function mainAsync() {
     const client = new Client({ node: 'http://localhost:9200' })
 
-    const url = normalizeUrl(argv.url, { forceHttps: true});
+    const url = cleanUrl(argv.url, { forceHttps: true});
     const baseUrl = url; // starting point, we do not escape from this domain
 
     console.log(`Going to crawl root site ${url}...`);
@@ -33,30 +33,62 @@ async function mainAsync() {
     const seenUrls = [];
 
     const browser = await puppeteer.launch()
+
+
     const queue = new Rx.Subject();
     queue.pipe(
-        RxOp.map((url) => normalizeUrl(url)),
+        RxOp.map((url) => cleanUrl(url)),
+        // RxOp.tap((url) => {
+        //     console.log(`next url [alreadyseen=${!!seenUrls.find(seenUrl => seenUrl === url)}]: ${url}`);
+        // }),
         RxOp.filter((url) => !seenUrls.find(seenUrl => seenUrl === url)),
         RxOp.concatMap((url) => fetchAndParsePage(browser, url)),
         RxOp.filter((parsedPageObject) => parsedPageObject !== undefined),
         RxOp.mergeMap((parsedPageObject) => index(client ,indexName, parsedPageObject)),
         RxOp.tap((result) => {
             seenUrls.push(result.url);
+            // console.log(`urls found on ${result.url}: ${result.outbound_urls}`)
             // only go deeper with our crawl on the same domain
             result.outbound_urls
                 .filter(u => u.startsWith(baseUrl))
                 .forEach(u => queue.next(u));
         })
     )
-        .subscribe(
-            (result) => console.log('Downloaded and indexed url: ' + result.url),
-            (err) => console.error('Error happened: ' + err.message)
-        );
+    .subscribe(
+        (result) => console.log(`[${seenUrls.length}] Downloaded and indexed new url: ${result.url}`),
+        (err) => console.error('Error happened: ' + err.message)
+    );
 
     // initiate first request into our queue
     queue.next(url);
 }
 
+function cleanUrl(url) {
+    // console.log('going to clean url: ', url);
+    //let baseUrl = normalizeUrl(argv.url, { forceHttps: true});
+
+    let baseUrl = url.toLowerCase();
+
+    // for static pages the query param is irrelevant
+    // const indexOf = baseUrl.indexOf('?');
+    // if (indexOf > -1) {
+    //     baseUrl = baseUrl.substr(0, indexOf);
+    //     console.log('removed ? part: ', baseUrl);
+    // }
+    
+
+    // for gitbook-like pages some navigations happen with #anchors in the url
+    // but we sometimes also see multiple anchors, remove those
+    const firstAnchor = baseUrl.indexOf('#');
+    if (firstAnchor > -1) {
+        const secondAnchor = baseUrl.indexOf('#', firstAnchor+1);
+        if (secondAnchor > -1){
+            baseUrl = baseUrl.substr(0, secondAnchor);
+        }
+    }
+
+    return baseUrl;
+}
 
 
 
@@ -104,15 +136,7 @@ async function parsePageContents(html, url) {
         url: url,
         crawled_at: new Date().toISOString(),
         outbound_urls: urls
-            .map(u => {
-                // remove any query params ?=.. stuff
-                const indexOf = u.indexOf('?');
-                if (indexOf > -1) {
-                    return u.substr(0, indexOf);
-                }
-                return u;
-            })
-            .map(u => normalizeUrl(u, { forceHttps: true}))
+            .map(u => cleanUrl(u))
             .filter(onlyUnique), //dedupe and normalize
     };
     return parsed;
