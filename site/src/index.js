@@ -1,15 +1,9 @@
 const express = require('express');
 const app = express();
 const port = 8080;
-const nunjucks = require('nunjucks');
-
-nunjucks.configure('views', {
-    autoescape: true,
-    express: app
-});
 
 app.get('/', (req, res) => {
-  res.render('index.html');
+  res.sendFile('./views/index.html', { root: __dirname });
 });
 
 app.post('/search', (req,res) => {
