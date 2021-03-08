@@ -29,7 +29,6 @@ async function mainAsync() {
     process.env.NODE_TLS_REJECT_UNAUTHORIZED = 0
 
     const indexName = await createIndex(client);
-    //const indexName = 'webpages-202102061623';
     const seenUrls = [];
 
     const browser = await puppeteer.launch()
@@ -47,7 +46,7 @@ async function mainAsync() {
         RxOp.mergeMap((parsedPageObject) => index(client ,indexName, parsedPageObject)),
         RxOp.tap((result) => {
             seenUrls.push(result.url);
-            // console.log(`urls found on ${result.url}: ${result.outbound_urls}`)
+            console.log(`urls found on ${result.url}: ${result.outbound_urls}`)
             // only go deeper with our crawl on the same domain
             result.outbound_urls
                 .filter(u => u.startsWith(baseUrl))
