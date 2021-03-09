@@ -144,6 +144,7 @@ async function fetchAndParsePage(browser, url, originUrl, isSeenUrlFnc, addToSee
             console.log(`Fetching ${url} resulted status ${response.status()}:${response.statusText()}`);
             console.log(response.headers());
             addToSeenUrlsFnc(url);// we do not want to keep indexing this url which fails
+            await page.close(); //close it up
             return undefined;
         }
         const html = await page.content();
