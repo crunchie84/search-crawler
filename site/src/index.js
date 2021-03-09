@@ -20,7 +20,7 @@ app.post('/search', (req,res) => {
         highlight: {
           fields: {
             content: {
-              "fragment_size": 250,
+              fragment_size: 200,
             }
           }
         }
