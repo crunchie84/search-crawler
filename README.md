@@ -35,7 +35,6 @@ kill -s SIGUSR2 {pid}
 ## sites to index
 
 ```
-npm run crawler -- --index=webpages --url=https://nn-cnc-corporate.docs.aws.insim.biz/gitbook --index=webpages-202103082203
 npm run crawler -- --index=webpages --url=https://nn-cnc-corporate.docs.aws.insim.biz/gitbook
 npm run crawler -- --index=webpages --url=https://web-components.docs.aws.insim.biz/frontenddevelopment-gettingstarted
 npm run crawler -- --index=webpages --url=https://aws-team.docs.aws.insim.biz/aws-platform/
@@ -43,12 +42,31 @@ npm run crawler -- --index=webpages --url=https://dockernn.docs.aws.insim.biz/cp
 npm run crawler -- --index=webpages --url=https://startech.docs.aws.insim.biz/api.insim.biz
 npm run crawler -- --index=webpages --url=https://nn-cnc-corporate.docs.aws.insim.biz/documentation/portal-documentation
 
+npm run crawler -- --index=webpages --url=https://nn-cnc-foundation.docs.aws.insim.biz/gitbooks/data-access/
+
+
 
 ```
 
+## scratchpad
+
 needs auth? need to figure out how
+https://dev.to/sonyarianto/puppeteer-quick-tip-how-to-do-basic-authentication-2pe7
+
 ```
 https://dev.azure.com/cio-innovation-nn-group/Catapult/_wiki/wikis/Catapult.wiki/41/Home
 https://nn-engineering.dev/
 
+```
+
+For getting access to authenticated resources we can use a hack
+- We run chrome with flags to allow a debugger to attach (`--remote-debugging-port=21222`)
+  - https://stackoverflow.com/questions/5018494/how-to-add-launch-parameter-to-google-chrome-on-mac
+  - open /Applications/Google\ Chrome.app --args --remote-debugging-port=21222
+- Instead of puppeteer opening a sandboxed browser we let it attach to our running browser instance
+  - npm run crawler -- --attachtorunningchrome --index=webpages --url=https://nn-engineering.dev/
+
+```
+const browserURL = 'http://127.0.0.1:21222';
+const browser = await puppeteer.connect({browserURL});
 ```

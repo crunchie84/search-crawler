@@ -41,7 +41,8 @@ async function mainAsync() {
 
     const indexName = argv.index;
     const seenUrls = [];
-    const browser = await puppeteer.launch()
+    
+    const browser = await getBrowser(argv.attachtorunningchrome !== undefined);
     let domain_title;
     const domain_url = baseUrl;
 
@@ -87,23 +88,24 @@ async function mainAsync() {
     queue.next({ url: url, origin: undefined});
 }
 
+async function getBrowser(doAttachToRunningInstance) {
+    if (doAttachToRunningInstance) {
+        console.log("going to attach to running chrome instead of sandboxed puppeteer sesssion...");
+        const browserURL = 'http://127.0.0.1:21222';
+        return await puppeteer.connect({browserURL});
+    }
+    // sandboxed new puppeteer instance, will not be able to leverage existing credentials in your browser
+    return await puppeteer.launch();
+}
+
 function cleanUrl(url) {
-    // let baseUrl = url
-    //     .replace('/./', '/');
-    let baseUrl = path.normalize(url);
-        
-    // remove trailing #
+    // remove any relative paths in the url
+    let baseUrl = new URL(url).href;
+
+    // remove trailing # if that is the only part there
     if (baseUrl.slice(-1) === '#') {
         baseUrl = baseUrl.substr(0, baseUrl.lastIndexOf('#')); //remove last char # because that makes no sense
     }
-
-    // for static pages the query param is irrelevant
-    // const indexOf = baseUrl.indexOf('?');
-    // if (indexOf > -1) {
-    //     baseUrl = baseUrl.substr(0, indexOf);
-    //     console.log('removed ? part: ', baseUrl);
-    // }
-    
 
     // for gitbook-like pages some navigations happen with #anchors in the url
     // but we sometimes also see multiple anchors, remove those
@@ -126,8 +128,6 @@ function cleanUrl(url) {
     return baseUrl;
 }
 
-
-
 async function fetchAndParsePage(browser, url, originUrl, isSeenUrlFnc, addToSeenUrlsFnc, logToDebugFnc) {
     url = cleanUrl(url);
     if (isSeenUrlFnc(url)){
@@ -140,10 +140,12 @@ async function fetchAndParsePage(browser, url, originUrl, isSeenUrlFnc, addToSee
         const response = await page.goto(url, { timeout: 5 * 1000});
         if (!response.ok()) {
             console.log(`Fetching ${url} resulted status ${response.status()}:${response.statusText()}`);
+            console.log(response.headers());
             addToSeenUrlsFnc(url);// we do not want to keep indexing this url which fails
             return undefined;
         }
         const html = await page.content();
+        await page.close(); //close it up
         return await parsePageContents(html, url);
     }
     catch (err) {
@@ -215,7 +217,7 @@ async function parsePageContents(html, url) {
 
         if (href.startsWith('/')) {
             //path is based on the root of the url
-            return urls.push('https://' + urlLib.parse(url).hostname + href);
+            return urls.push('https://' + urlLib.parse(baseUrlForLinks).hostname + href);
         }
 
         urls.push(baseUrlForLinks + href);//relative url
@@ -244,6 +246,11 @@ async function parsePageContents(html, url) {
         return undefined; // non-descriptive 404 page of gitbooks
     }
 
+    if (content == ''){
+        console.log('no content found on page!? ', url);
+        return undefined;
+    }
+
     const parsed = {
         content: content,
         title: $('title').text(),
@@ -251,6 +258,7 @@ async function parsePageContents(html, url) {
         crawled_at: new Date().toISOString(),
         outbound_urls: urls
             .map(u => cleanUrl(u))
+            .filter(u => !(u.endsWith('.png') || u.endsWith('.jpg') || u.endsWith('.pdf'))) // no images
             .filter(onlyUnique), //dedupe and normalize
     };
     return parsed;
