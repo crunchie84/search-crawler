@@ -100,7 +100,9 @@ async function getBrowser(doAttachToRunningInstance) {
 
 function cleanUrl(url) {
     // remove any relative paths in the url
-    let baseUrl = new URL(url).href;
+    const parsed = new URL(url);
+    parsed.search ='';
+    let baseUrl = parsed.href;
 
     // remove trailing # if that is the only part there
     if (baseUrl.slice(-1) === '#') {
